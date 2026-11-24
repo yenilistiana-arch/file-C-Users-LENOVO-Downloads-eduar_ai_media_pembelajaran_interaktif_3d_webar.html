@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EduAR-AI | Media Pembelajaran Interaktif 3D & WebAR</title>
+    
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            900: '#1e1b4b',
+                        },
+                        cyan: {
+                            400: '#22d3ee',
+                            500: '#06b6d4',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Three.js (r128) & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* Custom Scrollbar & Glassmorphism */
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #090d16;
+            color: #f8fafc;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+        }
+
+        .glass-panel-light {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #22d3ee;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+            transition: transform 0.15s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 2px;
+        }
+
+        /* Custom Scrollbar for AI Chat & Sidebars */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.4);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.7);
+        }
+
+        /* Markdown formatting inside AI Chat */
+        .ai-prose p { margin-bottom: 0.5rem; line-height: 1.5; }
+        .ai-prose p:last-child { margin-bottom: 0; }
+        .ai-prose strong { color: #38bdf8; font-weight: 600; }
+        .ai-prose code {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 0.1rem 0.35rem;
+            border-radius: 0.25rem;
+            font-size: 0.8em;
+            color: #a5b4fc;
+        }
+        .ai-prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+        .ai-prose ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+
+        /* Pulse animation for AR badge */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+        .ar-pulse::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background-color: #22d3ee;
+            animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        /* AR Crosshair overlay */
+        .ar-reticle {
+            background-image: 
+                linear-gradient(to right, rgba(34, 211, 238, 0.5) 2px, transparent 2px),
+                linear-gradient(to bottom, rgba(34, 211, 238, 0.5) 2px, transparent 2px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100">
+
+    <!-- WebRTC Camera Background Video (Hidden by default until AR Camera Mode is active) -->
+    <video id="ar-camera-feed" autoplay playsinline muted class="fixed inset-0 w-full h-full object-cover z-0 hidden"></video>
+
+    <!-- AR Grid Overlay Effect when in AR Mode -->
+    <div id="ar-overlay-hud" class="fixed inset-0 pointer-events-none z-5 hidden">
+        <div class="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full glass-panel border-cyan-500/40 flex items-center gap-2 text-xs font-mono text-cyan-300">
+            <span class="relative flex h-2.5 w-2.5 ar-pulse">
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-400"></span>
+            </span>
+            <span>MODE WEBAR AKTIF • TRACKING SPASIAL 3D</span>
+        </div>
+        <!-- Corner Viewfinder Brackets -->
+        <div class="fixed top-20 left-6 w-8 h-8 border-t-2 border-l-2 border-cyan-400/60 rounded-tl-lg"></div>
+        <div class="fixed top-20 right-6 w-8 h-8 border-t-2 border-r-2 border-cyan-400/60 rounded-tr-lg"></div>
+        <div class="fixed bottom-24 left-6 w-8 h-8 border-b-2 border-l-2 border-cyan-400/60 rounded-bl-lg"></div>
+        <div class="fixed bottom-24 right-6 w-8 h-8 border-b-2 border-r-2 border-cyan-400/60 rounded-br-lg"></div>
+    </div>
+
+    <!-- 3D Three.js Canvas Container -->
+    <div id="canvas-container" class="fixed inset-0 w-full h-full z-10 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- Custom Toast / Notification Banner (Replaces alert()) -->
+    <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-11/12 max-w-md"></div>
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="fixed top-3 left-3 right-3 z-30 flex items-center justify-between px-4 py-2.5 rounded-2xl glass-panel">
+        <!-- Brand Logo & Title -->
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <i data-lucide="boxes" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-bold text-sm sm:text-base tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-indigo-200 to-cyan-300">
+                        EduAR-AI Studio
+                    </h1>
+                    <span class="hidden md:inline-block px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        WebXR • Gemini AI
+                    </span>
+                </div>
+                <p id="header-subtitle" class="text-[11px] text-slate-400 truncate max-w-[180px] sm:max-w-xs">
+                    Literasi Digital: Jaringan Enkripsi Kriptografi
+                </p>
+            </div>
+        </div>
+
+        <!-- Center Module Switcher (Desktop) -->
+        <div class="hidden lg:flex items-center gap-1.5 p-1 rounded-xl bg-slate-900/80 border border-slate-700/60">
+            <button onclick="selectCategory('literasi')" id="tab-literasi" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 bg-indigo-600 text-white shadow-md">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                <span>Modul 1: Literasi Digital</span>
+            </button>
+            <button onclick="selectCategory('matematika')" id="tab-matematika" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 text-slate-400 hover:text-white">
+                <i data-lucide="sigma" class="w-3.5 h-3.5"></i>
+                <span>Modul 2: Aplikasi Matematika</span>
+            </button>
+        </div>
+
+        <!-- Right Action Controls (AR Mode, Camera Reset, AI Toggle) -->
+        <div class="flex items-center gap-2">
+            <!-- WebAR Camera Mode Toggle -->
+            <button id="btn-ar-toggle" onclick="toggleARMode()" class="px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 shadow-sm" title="Aktifkan Kamera WebAR / Simulasi AR">
+                <i data-lucide="camera" class="w-4 h-4"></i>
+                <span class="hidden sm:inline" id="ar-btn-text">Mode WebAR</span>
+            </button>
+
+            <!-- Native WebXR Button (Shown if device supports immersive-ar) -->
+            <button id="btn-webxr-native" onclick="startNativeWebXR()" class="hidden px-3 py-2 rounded-xl text-xs font-semibold transition-all items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25">
+                <i data-lucide="glasses" class="w-4 h-4"></i>
+                <span>WebXR</span>
+            </button>
+
+            <!-- Reset Camera View -->
+            <button onclick="resetCameraView()" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition-all" title="Reset Posisi Kamera 3D">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Toggle Mobile Drawers -->
+            <button onclick="toggleLeftDrawer()" class="lg:hidden p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60" title="Menu Modul & Parameter">
+                <i data-lucide="sliders" class="w-4 h-4"></i>
+            </button>
+            <button onclick="toggleRightDrawer()" class="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 transition-all flex items-center gap-1.5" title="Asisten Tutor AI">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span class="hidden md:inline text-xs font-medium">Tutor AI</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- LEFT SIDEBAR: MODULE EXPLORER & REAL-TIME PARAMETERS -->
+    <aside id="left-drawer" class="fixed top-20 bottom-4 left-3 z-20 w-80 max-w-[calc(100vw-1.5rem)] rounded-2xl glass-panel flex flex-col transition-transform duration-300 translate-x-0">
+        <!-- Mobile Category Switcher -->
+        <div class="lg:hidden p-3 border-b border-slate-700/60 grid grid-cols-2 gap-1.5">
+            <button onclick="selectCategory('literasi')" id="mob-tab-literasi" class="py-2 px-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white text-center">
+                Literasi Digital
+            </button>
+            <button onclick="selectCategory('matematika')" id="mob-tab-matematika" class="py-2 px-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-400 text-center">
+                Aplikasi Matematika
+            </button>
+        </div>
+
+        <!-- Topic Selection List -->
+        <div class="p-3.5 border-b border-slate-700/60">
+            <div class="flex items-center justify-between mb-2.5">
+                <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Pilih Topik Visualisasi 3D</span>
+                <button onclick="toggleLeftDrawer()" class="lg:hidden text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div id="topic-list" class="space-y-1.5">
+                <!-- Populated dynamically by JS -->
+            </div>
+        </div>
+
+        <!-- Dynamic Real-Time Simulation Parameters -->
+        <div class="flex-1 overflow-y-auto p-3.5 space-y-4">
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-mono uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+                        Parameter Interaktif
+                    </span>
+                    <button onclick="triggerSimAction()" id="btn-sim-action" class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition-all">
+                        Jalankan Simulasi
+                    </button>
+                </div>
+                <div id="parameter-controls" class="space-y-3.5 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+                    <!-- Dynamic sliders & toggles injected here -->
+                </div>
+            </div>
+
+            <!-- Live Concept Telemetry & Formula Card -->
+            <div class="p-3 rounded-xl bg-gradient-to-br from-indigo-950/60 to-slate-900/80 border border-indigo-500/20">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-indigo-300 mb-1.5">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                    <span id="concept-card-title">Ringkasan Konsep</span>
+                </div>
+                <p id="concept-card-desc" class="text-xs text-slate-300 leading-relaxed mb-2">
+                    Memuat deskripsi konsep pembelajaran...
+                </p>
+                <div id="concept-formula-box" class="p-2 rounded-lg bg-slate-950/80 border border-slate-800 font-mono text-[11px] text-cyan-300 overflow-x-auto">
+                    Ciphertext = E(Public_Key, Plaintext)
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Bottom Action: Ask AI about current state -->
+        <div class="p-3 border-t border-slate-700/60">
+            <button onclick="askAIAboutCurrentState()" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2">
+                <i data-lucide="bot" class="w-4 h-4"></i>
+                <span>Jelaskan Kondisi 3D Ini ke AI</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- RIGHT SIDEBAR: GENERATIVE AI TUTOR PANEL (GEMINI API) -->
+    <aside id="right-drawer" class="fixed top-20 bottom-4 right-3 z-20 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] rounded-2xl glass-panel flex flex-col transition-transform duration-300 translate-x-0">
+        <!-- AI Tutor Header -->
+        <div class="p-3.5 border-b border-slate-700/60 flex items-center justify-between bg-gradient-to-r from-indigo-950/50 to-transparent rounded-t-2xl">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h2 class="text-xs font-bold text-white flex items-center gap-1.5">
+                        Asisten Tutor Gemini AI
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    </h2>
+                    <p id="ai-context-badge" class="text-[10px] text-cyan-300 font-mono truncate max-w-[190px]">
+                        Konteks: Kriptografi Asimetris
+                    </p>
+                </div>
+            </div>
+            <button onclick="toggleRightDrawer()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- Quick Pedagogical Prompts -->
+        <div class="p-2.5 border-b border-slate-700/60 flex gap-1.5 overflow-x-auto no-scrollbar bg-slate-900/40">
+            <button onclick="sendQuickPrompt('explain')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600/40 border border-slate-700 hover:border-indigo-500/50 text-[11px] text-slate-200 transition-all flex items-center gap-1">
+                <i data-lucide="graduation-cap" class="w-3 h-3 text-cyan-400"></i>
+                <span>Jelaskan Bertahap</span>
+            </button>
+            <button onclick="sendQuickPrompt('quiz')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-purple-600/40 border border-slate-700 hover:border-purple-500/50 text-[11px] text-slate-200 transition-all flex items-center gap-1">
+                <i data-lucide="help-circle" class="w-3 h-3 text-purple-400"></i>
+                <span>Buat Kuis Interaktif</span>
+            </button>
+            <button onclick="sendQuickPrompt('analogy')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-600/40 border border-slate-700 hover:border-emerald-500/50 text-[11px] text-slate-200 transition-all flex items-center gap-1">
+                <i data-lucide="lightbulb" class="w-3 h-3 text-emerald-400"></i>
+                <span>Analogi Nyata</span>
+            </button>
+        </div>
+
+        <!-- Chat Messages Container -->
+        <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs">
+            <!-- Initial Welcome Message -->
+            <div class="flex gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="bot" class="w-4 h-4 text-indigo-300"></i>
+                </div>
+                <div class="p-3 rounded-2xl rounded-tl-none bg-slate-800/80 border border-slate-700/70 text-slate-200 ai-prose">
+                    <p>Halo! Saya <strong>Asisten Tutor AI</strong> Anda. Saya terhubung langsung dengan visualisasi 3D/AR di layar Anda.</p>
+                    <p>Ubah parameter di panel kiri atau putar objek 3D, lalu tanyakan konsep apa pun atau klik <strong>Buat Kuis Interaktif</strong> untuk menguji pemahaman Anda!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Quiz Container (Appears dynamically when a quiz is generated) -->
+        <div id="interactive-quiz-box" class="hidden mx-3 mb-2 p-3 rounded-xl bg-indigo-950/90 border border-indigo-500/50 shadow-lg">
+            <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[10px] font-mono uppercase tracking-wider text-cyan-300 font-semibold">Kuis Evaluasi Kontekstual</span>
+                <button onclick="closeQuizBox()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <p id="quiz-question-text" class="text-xs font-medium text-white mb-2.5 leading-snug"></p>
+            <div id="quiz-options-list" class="space-y-1.5"></div>
+            <div id="quiz-feedback-area" class="hidden mt-2.5 pt-2 border-t border-indigo-500/30 text-[11px]"></div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="ai-chat-form" onsubmit="handleChatSubmit(event)" class="p-3 border-t border-slate-700/60 bg-slate-900/60 rounded-b-2xl">
+            <div class="relative flex items-center">
+                <input type="text" id="ai-chat-input" placeholder="Tanya tentang objek 3D atau rumus..." autocomplete="off"
+                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 focus:border-cyan-400 focus:outline-none text-xs text-white placeholder-slate-400">
+                <button type="submit" id="ai-send-btn" class="absolute right-1.5 p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all disabled:opacity-50">
+                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+        </form>
+    </aside>
+
+    <!-- BOTTOM FLOATING INTERACTION HINT & OBJECT INSPECTOR -->
+    <div id="bottom-hud" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center gap-2 w-max max-w-[92vw]">
+        <div id="hovered-node-badge" class="hidden px-3.5 py-1.5 rounded-xl glass-panel border-cyan-400/50 text-xs font-mono text-cyan-200 shadow-lg">
+            Inspeksi Objek: <span id="hovered-node-text" class="font-bold text-white">-</span>
+        </div>
+        <div class="px-3.5 py-1.5 rounded-full glass-panel-light text-[11px] text-slate-300 flex items-center gap-3">
+            <span class="flex items-center gap-1"><i data-lucide="mouse-pointer-click" class="w-3 h-3 text-cyan-400"></i> Geser: Putar 3D</span>
+            <span class="text-slate-600">•</span>
+            <span class="flex items-center gap-1"><i data-lucide="zoom-in" class="w-3 h-3 text-indigo-400"></i> Scroll/Cubit: Zoom</span>
+            <span class="hidden sm:inline text-slate-600">•</span>
+            <span class="hidden sm:flex items-center gap-1"><i data-lucide="hand" class="w-3 h-3 text-purple-400"></i> Klik Objek: Inspeksi</span>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // 1. KONFIGURASI GEMINI API & STATE APLIKASI
+        // ============================================================================
+        const apiKey = ""; // Otomatis diisi oleh lingkungan runtime
+        const GEMINI_MODEL = "gemini-3-flash-preview";
+
+        // Definisi Kurikulum & Modul Pembelajaran 3D
+        const CURRICULUM = {
+            literasi: {
+                title: "Modul 1: Literasi Digital",
+                topics: {
+                    crypto: {
+                        id: "crypto",
+                        category: "literasi",
+                        name: "Jaringan Enkripsi Kriptografi",
+                        shortName: "Kriptografi & TLS",
+                        icon: "key-round",
+                        description: "Visualisasi transmisi paket data melalui jaringan publik menggunakan enkripsi End-to-End (RSA/AES). Amati perbedaan paket Plaintext (rentan intersepsi) dan Ciphertext (terenkripsi).",
+                        formula: "C = M^e mod n  |  M = C^d mod n",
+                        actionLabel: "Kirim Paket Data",
+                        params: [
+                            { id: "keyStrength", label: "Panjang Kunci (Bit)", type: "range", min: 64, max: 512, step: 64, value: 256, unit: "-bit" },
+                            { id: "isEncrypted", label: "Aktifkan Enkripsi E2EE", type: "toggle", value: true },
+                            { id: "mitmAttack", label: "Simulasi Penyadap (MITM)", type: "toggle", value: false }
+                        ]
+                    },
+                    footprint: {
+                        id: "footprint",
+                        category: "literasi",
+                        name: "Jejak Digital & Keamanan Siber",
+                        shortName: "Jejak Digital",
+                        icon: "fingerprint",
+                        description: "Representasi graf topologi bagaimana aktivitas daring (metadata, cookie, media sosial) membentuk klaster identitas digital dan titik kerentanan privasi.",
+                        formula: "Exposure_Risk = Σ (Node_Weight × Public_Visibility)",
+                        actionLabel: "Audit Privasi",
+                        params: [
+                            { id: "sharingLevel", label: "Intensitas Berbagi Data", type: "range", min: 1, max: 10, step: 1, value: 6, unit: " node" },
+                            { id: "trackerBlock", label: "Anti-Tracking & VPN", type: "toggle", value: false },
+                            { id: "twoFactor", label: "Autentikasi 2FA Aktif", type: "toggle", value: true }
+                        ]
+                    },
+                    datastruct: {
+                        id: "datastruct",
+                        category: "literasi",
+                        name: "Struktur Data & Algoritma 3D",
+                        shortName: "Binary Search Tree",
+                        icon: "git-fork",
+                        description: "Visualisasi spasial Binary Search Tree (BST) dan kompleksitas pencarian logaritmik O(log n) dibandingkan pencarian linear pada sistem pemrosesan informasi.",
+                        formula: "Kompleksitas Waktu: O(log₂ n) | Tinggi Pohon: h",
+                        actionLabel: "Cari Node Target",
+                        params: [
+                            { id: "treeDepth", label: "Kedalaman Pohon (Level)", type: "range", min: 2, max: 4, step: 1, value: 3, unit: " lvl" },
+                            { id: "targetValue", label: "Nilai Target Pencarian", type: "range", min: 10, max: 90, step: 5, value: 65, unit: "" },
+                            { id: "showTraversal", label: "Sorot Jalur Pencarian", type: "toggle", value: true }
+                        ]
+                    }
+                }
+            },
+            matematika: {
+                title: "Modul 2: Aplikasi Matematika",
+                topics: {
+                    calculus: {
+                        id: "calculus",
+                        category: "matematika",
+                        name: "Kalkulus Multivariabel f(x, y)",
+                        shortName: "Permukaan f(x,y)",
+                        icon: "waves",
+                        description: "Visualisasi 3D fungsi dua peubah z = f(x, y) untuk memahami gradien, titik pelana (saddle point), maksimum lokal, dan turunan parsial ∂z/∂x serta ∂z/∂y.",
+                        formula: "z = A · sin(ω·x) · cos(ω·y)  |  ∇f = (∂f/∂x, ∂f/∂y)",
+                        actionLabel: "Hitung Gradien Titik",
+                        params: [
+                            { id: "amplitude", label: "Amplitudo (A)", type: "range", min: 0.5, max: 3.0, step: 0.25, value: 1.5, unit: "" },
+                            { id: "frequency", label: "Frekuensi Gelombang (ω)", type: "range", min: 0.5, max: 2.5, step: 0.25, value: 1.25, unit: "" },
+                            { id: "showGradient", label: "Tampilkan Vektor Normal", type: "toggle", value: true }
+                        ]
+                    },
+                    matrix: {
+                        id: "matrix",
+                        category: "matematika",
+                        name: "Transformasi Matriks Geometri 3D",
+                        shortName: "Matriks Linear 3D",
+                        icon: "move-3d",
+                        description: "Eksplorasi aljabar linear: bagaimana matriks transformasi 3x3 mengubah basis vektor (i, j, k), melakukan penskalaan (scaling), rotasi, dan geseran (shear) pada ruang 3D.",
+                        formula: "v' = M · v  |  det(M) = Faktor Perubahan Volume",
+                        actionLabel: "Reset ke Identitas",
+                        params: [
+                            { id: "scaleX", label: "Skala Sumbu X (M₁₁)", type: "range", min: 0.5, max: 2.5, step: 0.1, value: 1.2, unit: "x" },
+                            { id: "shearXY", label: "Geseran / Shear (M₁₂)", type: "range", min: -1.5, max: 1.5, step: 0.1, value: 0.4, unit: "" },
+                            { id: "rotY", label: "Rotasi Sumbu Y (θ)", type: "range", min: 0, max: 360, step: 15, value: 30, unit: "°" }
+                        ]
+                    },
+                    probability: {
+                        id: "probability",
+                        category: "matematika",
+                        name: "Distribusi Probabilitas Bivariat 3D",
+                        shortName: "Distribusi Normal 3D",
+                        icon: "bar-chart-3",
+                        description: "Permukaan kepadatan probabilitas (PDF) Distribusi Normal Bivariat (Bell Curve 3D). Amati pengaruh simpangan baku (σ) terhadap penyebaran peluang.",
+                        formula: "f(x,y) = (1 / 2πσ²) · exp(-(x² + y²) / 2σ²)",
+                        actionLabel: "Sampel Acak Monte Carlo",
+                        params: [
+                            { id: "sigma", label: "Simpangan Baku (σ)", type: "range", min: 0.6, max: 2.2, step: 0.1, value: 1.1, unit: "" },
+                            { id: "correlation", label: "Korelasi (ρ)", type: "range", min: -0.8, max: 0.8, step: 0.1, value: 0.3, unit: "" },
+                            { id: "showSamples", label: "Tampilkan Titik Sampel", type: "toggle", value: true }
+                        ]
+                    }
+                }
+            }
+        };
+
+        // State Global Aplikasi
+        let appState = {
+            currentCategory: "literasi",
+            currentTopicId: "crypto",
+            params: {},
+            isARMode: false,
+            arStream: null,
+            chatHistory: [],
+            isGeneratingAI: false
+        };
+
+        // ============================================================================
+        // 2. INISIALISASI THREE.JS & SCENE 3D
+        // ============================================================================
+        let scene, camera, renderer, controls, raycaster, mouse;
+        let activeGroup = new THREE.Group();
+        let gridHelper, ambientLight, dirLight, pointLight;
+        let animationObjects = []; // Objek yang dianimasikan tiap frame
+        let interactiveMeshes = []; // Mesh yang bisa diklik/hover untuk inspeksi
+        let clock = new THREE.Clock();
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090d16);
+            scene.fog = new THREE.FogExp2(0x090d16, 0.035);
+
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 4.5, 8.5);
+
+            // Alpha: true sangat krusial agar latar video kamera WebAR terlihat tembus pandang
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.xr.enabled = true; // Dukungan WebXR native
+            container.appendChild(renderer.domElement);
+
+            // OrbitControls untuk rotasi & zoom intuitif (Mouse & Touch)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxDistance = 20;
+            controls.minDistance = 2.5;
+            controls.maxPolarAngle = Math.PI * 0.85;
+
+            // Pencahayaan Futuristik
+            ambientLight = new THREE.AmbientLight(0x94a3b8, 0.7);
+            scene.add(ambientLight);
+
+            dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+            dirLight.position.set(6, 10, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            pointLight = new THREE.PointLight(0x22d3ee, 1.5, 25);
+            pointLight.position.set(-4, 5, 4);
+            scene.add(pointLight);
+
+            // Lantai Grid Spasial
+            gridHelper = new THREE.GridHelper(16, 16, 0x38bdf8, 0x1e293b);
+            gridHelper.position.y = -2;
+            gridHelper.material.transparent = true;
+            gridHelper.material.opacity = 0.45;
+            scene.add(gridHelper);
+
+            scene.add(activeGroup);
+
+            // Raycaster untuk interaksi klik/sentuh objek 3D
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('pointermove', onPointerMove);
+            renderer.domElement.addEventListener('click', onObjectClick);
+
+            // Cek dukungan WebXR Immersive AR pada browser perangkat
+            if (navigator.xr) {
+                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                    if (supported) {
+                        const xrBtn = document.getElementById('btn-webxr-native');
+                        xrBtn.classList.remove('hidden');
+                        xrBtn.classList.add('flex');
+                    }
+                }).catch(() => {});
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function resetCameraView() {
+            camera.position.set(0, 4.5, 8.5);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            showToast("Posisi kamera 3D dikembalikan ke sudut pandang awal.", "info");
+        }
+
+        // ============================================================================
+        // 3. PEMBANGUN VISUALISASI 3D UNTUK SETIAP TOPIK PEMBELAJARAN
+        // ============================================================================
+        function clearSceneGroup() {
+            while (activeGroup.children.length > 0) {
+                const obj = activeGroup.children[0];
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+                activeGroup.remove(obj);
+            }
+            animationObjects = [];
+            interactiveMeshes = [];
+        }
+
+        function buildCurrentVisualization() {
+            clearSceneGroup();
+            const topicId = appState.currentTopicId;
+            const p = appState.params;
+
+            if (topicId === 'crypto') buildCryptoScene(p);
+            else if (topicId === 'footprint') buildFootprintScene(p);
+            else if (topicId === 'datastruct') buildBSTScene(p);
+            else if (topicId === 'calculus') buildCalculusScene(p);
+            else if (topicId === 'matrix') buildMatrixScene(p);
+            else if (topicId === 'probability') buildProbabilityScene(p);
+        }
+
+        // --- VISUALISASI 1A: KRIPTOGRAFI & JARINGAN ENKRIPSI ---
+        function buildCryptoScene(p) {
+            // Node Pengirim (Client)
+            const senderGeo = new THREE.OctahedronGeometry(0.9, 1);
+            const senderMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, emissive: 0x1d4ed8, emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.8 });
+            const sender = new THREE.Mesh(senderGeo, senderMat);
+            sender.position.set(-4, 0, 0);
+            sender.userData = { label: "Pengirim (Client) - Kunci Publik Penerima" };
+            activeGroup.add(sender);
+            interactiveMeshes.push(sender);
+
+            // Node Penerima (Server)
+            const receiverGeo = new THREE.OctahedronGeometry(0.9, 1);
+            const receiverMat = new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x047857, emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.8 });
+            const receiver = new THREE.Mesh(receiverGeo, receiverMat);
+            receiver.position.set(4, 0, 0);
+            receiver.userData = { label: "Penerima (Server) - Kunci Privat Dekripsi" };
+            activeGroup.add(receiver);
+            interactiveMeshes.push(receiver);
+
+            // Terowongan Enkripsi TLS (Silinder Transparan)
+            const tunnelRadius = p.isEncrypted ? (0.4 + (p.keyStrength / 512) * 0.7) : 0.25;
+            const tunnelGeo = new THREE.CylinderGeometry(tunnelRadius, tunnelRadius, 8, 24, 1, true);
+            tunnelGeo.rotateZ(Math.PI / 2);
+            const tunnelMat = new THREE.MeshBasicMaterial({
+                color: p.isEncrypted ? 0x22d3ee : 0xef4444,
+                wireframe: true,
+                transparent: true,
+                opacity: p.isEncrypted ? 0.35 : 0.2
+            });
+            const tunnel = new THREE.Mesh(tunnelGeo, tunnelMat);
+            tunnel.userData = { label: p.isEncrypted ? `Terowongan TLS Terenkripsi (${p.keyStrength}-bit)` : "Saluran HTTP Terbuka (Tidak Terenkripsi)" };
+            activeGroup.add(tunnel);
+            interactiveMeshes.push(tunnel);
+
+            // Paket Data yang bergerak dari Pengirim ke Penerima
+            for (let i = 0; i < 4; i++) {
+                const pktGeo = p.isEncrypted ? new THREE.IcosahedronGeometry(0.28, 0) : new THREE.BoxGeometry(0.35, 0.35, 0.35);
+                const pktMat = new THREE.MeshStandardMaterial({
+                    color: p.isEncrypted ? 0x38bdf8 : 0xfbbf24,
+                    emissive: p.isEncrypted ? 0x0284c7 : 0xd97706,
+                    emissiveIntensity: 0.7
+                });
+                const pkt = new THREE.Mesh(pktGeo, pktMat);
+                pkt.position.set(-4 + i * 2, 0, 0);
+                pkt.userData = { label: p.isEncrypted ? "Paket Ciphertext (Tersandi)" : "Paket Plaintext (Terbaca Bebas)" };
+                activeGroup.add(pkt);
+                interactiveMeshes.push(pkt);
+                animationObjects.push({ mesh: pkt, type: 'packet', offset: i * 0.25, encrypted: p.isEncrypted });
+            }
+
+            // Node Penyadap (Man-in-the-Middle) jika aktif
+            if (p.mitmAttack) {
+                const attackerGeo = new THREE.ConeGeometry(0.65, 1.3, 4);
+                const attackerMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xb91c1c, emissiveIntensity: 0.6 });
+                const attacker = new THREE.Mesh(attackerGeo, attackerMat);
+                attacker.position.set(0, 2.2, 0);
+                attacker.rotation.x = Math.PI;
+                attacker.userData = { label: p.isEncrypted ? "Penyadap MITM (Gagal Membaca Ciphertext)" : "Penyadap MITM (Berhasil Mencuri Plaintext!)" };
+                activeGroup.add(attacker);
+                interactiveMeshes.push(attacker);
+
+                // Garis intersepsi
+                const lineMat = new THREE.LineBasicMaterial({ color: 0xef4444 });
+                const points = [new THREE.Vector3(0, 2.0, 0), new THREE.Vector3(0, 0, 0)];
+                const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+                activeGroup.add(new THREE.Line(lineGeo, lineMat));
+                animationObjects.push({ mesh: attacker, type: 'spin', speed: 2.0 });
+            }
+
+            animationObjects.push({ mesh: sender, type: 'spin', speed: 0.6 });
+            animationObjects.push({ mesh: receiver, type: 'spin', speed: -0.6 });
+        }
+
+        // --- VISUALISASI 1B: JEJAK DIGITAL & KEAMANAN SIBER ---
+        function buildFootprintScene(p) {
+            // Core Identity Node (Pengguna)
+            const coreGeo = new THREE.SphereGeometry(0.85, 32, 32);
+            const coreMat = new THREE.MeshStandardMaterial({
+                color: p.twoFactor ? 0x10b981 : 0xf59e0b,
+                emissive: p.twoFactor ? 0x059669 : 0xd97706,
+                emissiveIntensity: 0.5,
+                roughness: 0.2
+            });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            core.userData = { label: p.twoFactor ? "Identitas Utama (Dilindungi 2FA)" : "Identitas Utama (Tanpa 2FA - Rentan)" };
+            activeGroup.add(core);
+            interactiveMeshes.push(core);
+
+            // Perisai VPN / Anti-Tracking
+            if (p.trackerBlock) {
+                const shieldGeo = new THREE.SphereGeometry(1.45, 24, 24);
+                const shieldMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, wireframe: true, transparent: true, opacity: 0.35 });
+                const shield = new THREE.Mesh(shieldGeo, shieldMat);
+                shield.userData = { label: "Perisai Privasi (VPN & Pemblokir Pelacak)" };
+                activeGroup.add(shield);
+                animationObjects.push({ mesh: shield, type: 'spin', speed: 0.3 });
+            }
+
+            // Node Jejak Digital (Media Sosial, Metadata Lokasi, Cookie, Riwayat)
+            const nodeLabels = ["Media Sosial", "Metadata GPS", "Cookie Iklan", "Riwayat Pencarian", "E-Commerce", "Forum Publik", "Aplikasi Pihak-3", "Cloud Backup", "Data Biometrik", "Log IP Publik"];
+            const count = p.sharingLevel;
+
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                const radius = 2.6 + (i % 2) * 0.9;
+                const yOffset = Math.sin(i * 1.5) * 1.1;
+
+                const isExposed = !p.trackerBlock;
+                const nodeGeo = new THREE.DodecahedronGeometry(0.35, 0);
+                const nodeMat = new THREE.MeshStandardMaterial({
+                    color: isExposed ? 0xf43f5e : 0x6366f1,
+                    emissive: isExposed ? 0xbe123c : 0x4338ca,
+                    emissiveIntensity: 0.4
+                });
+                const node = new THREE.Mesh(nodeGeo, nodeMat);
+                node.position.set(Math.cos(angle) * radius, yOffset, Math.sin(angle) * radius);
+                node.userData = { label: `Jejak: ${nodeLabels[i % nodeLabels.length]} (${isExposed ? 'Terbuka ke Data Broker' : 'Tersamarkan'})` };
+                activeGroup.add(node);
+                interactiveMeshes.push(node);
+
+                // Koneksi garis ke identitas utama
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: isExposed ? 0xf43f5e : 0x4f46e5,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), node.position]);
+                activeGroup.add(new THREE.Line(lineGeo, lineMat));
+
+                animationObjects.push({ mesh: node, type: 'orbit', radius: radius, angle: angle, y: yOffset, speed: 0.25 });
+            }
+        }
+
+        // --- VISUALISASI 1C: STRUKTUR DATA & ALGORITMA (BINARY SEARCH TREE 3D) ---
+        function buildBSTScene(p) {
+            const maxDepth = p.treeDepth;
+            const target = p.targetValue;
+
+            // Bangun pohon biner terurut secara rekursif
+            function createNode(val, minVal, maxVal, depth, x, y, z, spreadX, isOnPath) {
+                const isMatch = Math.abs(val - target) <= 5;
+                const radius = isMatch ? 0.42 : 0.32;
+
+                let color = 0x6366f1;
+                if (isMatch && p.showTraversal) color = 0x10b981; // Ditemukan
+                else if (isOnPath && p.showTraversal) color = 0x22d3ee; // Jalur pencarian
+
+                const geo = new THREE.SphereGeometry(radius, 24, 24);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: (isOnPath && p.showTraversal) ? 0.6 : 0.2,
+                    roughness: 0.3
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, y, z);
+                mesh.userData = { label: `Node BST [Nilai: ${val}] • Level ${depth}${isMatch ? ' (TARGET DITEMUKAN)' : ''}` };
+                activeGroup.add(mesh);
+                interactiveMeshes.push(mesh);
+
+                if (isMatch && p.showTraversal) {
+                    animationObjects.push({ mesh: mesh, type: 'pulse' });
+                }
+
+                if (depth < maxDepth) {
+                    const nextY = y - 1.35;
+                    const nextSpread = spreadX * 0.52;
+
+                    // Anak Kiri (< val)
+                    const leftVal = Math.floor((minVal + val) / 2);
+                    const leftOnPath = isOnPath && (target < val);
+                    const leftPos = new THREE.Vector3(x - spreadX, nextY, (depth % 2 === 0 ? 0.4 : -0.4));
+                    drawEdge(mesh.position, leftPos, leftOnPath && p.showTraversal);
+                    createNode(leftVal, minVal, val - 1, depth + 1, leftPos.x, leftPos.y, leftPos.z, nextSpread, leftOnPath);
+
+                    // Anak Kanan (> val)
+                    const rightVal = Math.floor((val + maxVal) / 2);
+                    const rightOnPath = isOnPath && (target > val);
+                    const rightPos = new THREE.Vector3(x + spreadX, nextY, (depth % 2 === 0 ? -0.4 : 0.4));
+                    drawEdge(mesh.position, rightPos, rightOnPath && p.showTraversal);
+                    createNode(rightVal, val + 1, maxVal, depth + 1, rightPos.x, rightPos.y, rightPos.z, nextSpread, rightOnPath);
+                }
+            }
+
+            function drawEdge(p1, p2, highlighted) {
+                const mat = new THREE.LineBasicMaterial({
+                    color: highlighted ? 0x22d3ee : 0x475569,
+                    linewidth: highlighted ? 3 : 1
+                });
+                const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+                activeGroup.add(new THREE.Line(geo, mat));
+            }
+
+            createNode(50, 0, 100, 1, 0, 2.2, 0, 2.6, true);
+        }
+
+        // --- VISUALISASI 2A: KALKULUS MULTIVARIABEL f(x, y) ---
+        function buildCalculusScene(p) {
+            const size = 6;
+            const segments = 48;
+            const geo = new THREE.PlaneGeometry(size, size, segments, segments);
+            geo.rotateX(-Math.PI / 2);
+
+            const pos = geo.attributes.position;
+            const colors = [];
+            const colorObj = new THREE.Color();
+
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i); // merepresentasikan sumbu y dalam koordinat f(x, y)
+                const y = p.amplitude * Math.sin(p.frequency * x) * Math.cos(p.frequency * z);
+                pos.setY(i, y);
+
+                // Pewarnaan gradien ketinggian (Biru -> Cyan -> Magenta)
+                const normH = (y + 3) / 6;
+                colorObj.setHSL(0.55 + normH * 0.3, 0.85, 0.55);
+                colors.push(colorObj.r, colorObj.g, colorObj.b);
+            }
+
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geo.computeVertexNormals();
+
+            const mat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                side: THREE.DoubleSide,
+                roughness: 0.3,
+                metalness: 0.2
+            });
+            const surface = new THREE.Mesh(geo, mat);
+            surface.userData = { label: `Permukaan f(x,y) = ${p.amplitude}·sin(${p.frequency}x)·cos(${p.frequency}y)` };
+            activeGroup.add(surface);
+            interactiveMeshes.push(surface);
+
+            // Wireframe overlay tipis untuk memperjelas kurva kontur
+            const wireMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.12 });
+            activeGroup.add(new THREE.Mesh(geo, wireMat));
+
+            // Vektor Gradien / Normal pada titik uji (x=1, y=1)
+            if (p.showGradient) {
+                const tx = 1.0, tz = 1.0;
+                const ty = p.amplitude * Math.sin(p.frequency * tx) * Math.cos(p.frequency * tz);
+                
+                // Turunan parsial df/dx dan df/dy
+                const dfdx = p.amplitude * p.frequency * Math.cos(p.frequency * tx) * Math.cos(p.frequency * tz);
+                const dfdy = -p.amplitude * p.frequency * Math.sin(p.frequency * tx) * Math.sin(p.frequency * tz);
+
+                const origin = new THREE.Vector3(tx, ty, tz);
+                const normalDir = new THREE.Vector3(-dfdx, 1, -dfdy).normalize();
+                const arrowHelper = new THREE.ArrowHelper(normalDir, origin, 1.6, 0xfbbf24, 0.35, 0.2);
+                activeGroup.add(arrowHelper);
+
+                const dotGeo = new THREE.SphereGeometry(0.14, 16, 16);
+                const dotMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+                const dot = new THREE.Mesh(dotGeo, dotMat);
+                dot.position.copy(origin);
+                dot.userData = { label: `Titik Uji (1, 1) | Gradien ∇f = (${dfdx.toFixed(2)}, ${dfdy.toFixed(2)})` };
+                activeGroup.add(dot);
+                interactiveMeshes.push(dot);
+            }
+        }
+
+        // --- VISUALISASI 2B: TRANSFORMASI MATRIKS GEOMETRI 3D ---
+        function buildMatrixScene(p) {
+            // Kubus Referensi Satuan (Putus-putus / Wireframe redup)
+            const refGeo = new THREE.BoxGeometry(2, 2, 2);
+            const refMat = new THREE.MeshBasicMaterial({ color: 0x64748b, wireframe: true, transparent: true, opacity: 0.35 });
+            const refCube = new THREE.Mesh(refGeo, refMat);
+            refCube.userData = { label: "Ruang Referensi Identitas (Matriks I)" };
+            activeGroup.add(refCube);
+
+            // Kubus Hasil Transformasi Matriks
+            const transGeo = new THREE.BoxGeometry(2, 2, 2);
+            const transMat = new THREE.MeshStandardMaterial({
+                color: 0x6366f1,
+                emissive: 0x312e81,
+                emissiveIntensity: 0.4,
+                transparent: true,
+                opacity: 0.75,
+                roughness: 0.2
+            });
+            const transCube = new THREE.Mesh(transGeo, transMat);
+
+            // Susun Matriks Transformasi 4x4 (Skala X, Shear XY, Rotasi Y)
+            const rad = THREE.MathUtils.degToRad(p.rotY);
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            const m = new THREE.Matrix4();
+            // Kombinasi rotasi Y, skala X, dan shear XY
+            m.set(
+                p.scaleX * cos, p.shearXY, sin, 0,
+                0,              1,         0,   0,
+                -p.scaleX * sin, 0,        cos, 0,
+                0,              0,         0,   1
+            );
+
+            transCube.matrixAutoUpdate = false;
+            transCube.matrix.copy(m);
+            transCube.userData = { label: `Objek Tertransformasi | Det(M) ≈ ${(p.scaleX).toFixed(2)}` };
+            activeGroup.add(transCube);
+            interactiveMeshes.push(transCube);
+
+            // Edge highlight pada kubus tertransformasi
+            const edges = new THREE.EdgesGeometry(transGeo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x22d3ee }));
+            line.matrixAutoUpdate = false;
+            line.matrix.copy(m);
+            activeGroup.add(line);
+
+            // Vektor Basis i (Merah), j (Hijau), k (Biru)
+            const vI = new THREE.Vector3(1, 0, 0).applyMatrix4(m).normalize();
+            const vJ = new THREE.Vector3(0, 1, 0).applyMatrix4(m).normalize();
+            const vK = new THREE.Vector3(0, 0, 1).applyMatrix4(m).normalize();
+
+            activeGroup.add(new THREE.ArrowHelper(vI, new THREE.Vector3(0, 0, 0), 2.2 * p.scaleX, 0xf43f5e, 0.3, 0.15));
+            activeGroup.add(new THREE.ArrowHelper(vJ, new THREE.Vector3(0, 0, 0), 2.2, 0x10b981, 0.3, 0.15));
+            activeGroup.add(new THREE.ArrowHelper(vK, new THREE.Vector3(0, 0, 0), 2.2, 0x38bdf8, 0.3, 0.15));
+        }
+
+        // --- VISUALISASI 2C: DISTRIBUSI PROBABILITAS BIVARIAT 3D ---
+        function buildProbabilityScene(p) {
+            const size = 6.5;
+            const segments = 50;
+            const geo = new THREE.PlaneGeometry(size, size, segments, segments);
+            geo.rotateX(-Math.PI / 2);
+
+            const pos = geo.attributes.position;
+            const colors = [];
+            const colorObj = new THREE.Color();
+
+            const sigma = p.sigma;
+            const rho = p.correlation;
+            const denom = 2 * (1 - rho * rho) * sigma * sigma;
+
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const y = pos.getZ(i);
+                const exponent = -((x * x - 2 * rho * x * y + y * y) / denom);
+                const pdf = (3.2 / sigma) * Math.exp(exponent); // Diskalakan untuk visual 3D
+                pos.setY(i, pdf - 1.5);
+
+                const intensity = Math.min(pdf / 3.2, 1.0);
+                colorObj.setHSL(0.62 - intensity * 0.48, 0.9, 0.52);
+                colors.push(colorObj.r, colorObj.g, colorObj.b);
+            }
+
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geo.computeVertexNormals();
+
+            const mat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                side: THREE.DoubleSide,
+                roughness: 0.25
+            });
+            const bellMesh = new THREE.Mesh(geo, mat);
+            bellMesh.userData = { label: `Kurva Bell 3D (σ = ${sigma}, Korelasi ρ = ${rho})` };
+            activeGroup.add(bellMesh);
+            interactiveMeshes.push(bellMesh);
+
+            // Titik Sampel Monte Carlo jika diaktifkan
+            if (p.showSamples) {
+                const sampleGeo = new THREE.SphereGeometry(0.07, 8, 8);
+                const sampleMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                for (let s = 0; s < 35; s++) {
+                    // Box-Muller transform untuk sampel normal bivariat
+                    const u1 = Math.random() || 0.001;
+                    const u2 = Math.random();
+                    const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+                    const z1 = Math.sqrt(-2.0 * Math.log(u1)) * Math.sin(2.0 * Math.PI * u2);
+
+                    const sx = sigma * z0;
+                    const sy = sigma * (rho * z0 + Math.sqrt(1 - rho * rho) * z1);
+                    if (Math.abs(sx) < 3 && Math.abs(sy) < 3) {
+                        const exponent = -((sx * sx - 2 * rho * sx * sy + sy * sy) / denom);
+                        const sz = (3.2 / sigma) * Math.exp(exponent) - 1.42;
+                        const dot = new THREE.Mesh(sampleGeo, sampleMat);
+                        dot.position.set(sx, sz, sy);
+                        activeGroup.add(dot);
+                    }
+                }
+            }
+        }
+
+        // ============================================================================
+        // 4. ANIMATION LOOP & INTERAKSI RAYCASTING
+        // ============================================================================
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsed = clock.getElapsedTime();
+
+            animationObjects.forEach(item => {
+                if (item.type === 'spin') {
+                    item.mesh.rotation.y += 0.01 * item.speed;
+                    item.mesh.rotation.x += 0.005 * item.speed;
+                } else if (item.type === 'packet') {
+                    const progress = ((elapsed * 0.35 + item.offset) % 1);
+                    item.mesh.position.x = -4 + progress * 8;
+                    if (!item.encrypted) {
+                        item.mesh.position.y = Math.sin(progress * Math.PI * 4) * 0.15;
+                    }
+                    item.mesh.rotation.y += 0.04;
+                } else if (item.type === 'orbit') {
+                    const a = item.angle + elapsed * item.speed;
+                    item.mesh.position.x = Math.cos(a) * item.radius;
+                    item.mesh.position.z = Math.sin(a) * item.radius;
+                } else if (item.type === 'pulse') {
+                    const s = 1 + Math.sin(elapsed * 4) * 0.15;
+                    item.mesh.scale.set(s, s, s);
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onPointerMove(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactiveMeshes);
+
+            const badge = document.getElementById('hovered-node-badge');
+            const badgeText = document.getElementById('hovered-node-text');
+
+            if (intersects.length > 0 && intersects[0].object.userData.label) {
+                badge.classList.remove('hidden');
+                badgeText.textContent = intersects[0].object.userData.label;
+                document.body.style.cursor = 'pointer';
+            } else {
+                badge.classList.add('hidden');
+                document.body.style.cursor = 'default';
+            }
+        }
+
+        function onObjectClick(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactiveMeshes);
+
+            if (intersects.length > 0 && intersects[0].object.userData.label) {
+                const label = intersects[0].object.userData.label;
+                showToast(`Inspeksi Komponen 3D: ${label}`, "info");
+            }
+        }
+
+        // ============================================================================
+        // 5. MODE KAMERA WEBAR (WEBRTC CAMERA OVERLAY & NATIVE WEBXR)
+        // ============================================================================
+        async function toggleARMode() {
+            const videoEl = document.getElementById('ar-camera-feed');
+            const arHud = document.getElementById('ar-overlay-hud');
+            const btnText = document.getElementById('ar-btn-text');
+            const btn = document.getElementById('btn-ar-toggle');
+
+            if (!appState.isARMode) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: "environment" } },
+                        audio: false
+                    });
+                    videoEl.srcObject = stream;
+                    videoEl.classList.remove('hidden');
+                    arHud.classList.remove('hidden');
+
+                    // Buat latar belakang Three.js transparan agar objek 3D melayang di atas kamera
+                    scene.background = null;
+                    scene.fog = null;
+                    gridHelper.material.opacity = 0.2;
+
+                    appState.arStream = stream;
+                    appState.isARMode = true;
+                    btnText.textContent = "Matikan AR";
+                    btn.classList.remove('bg-slate-800/90', 'text-cyan-300');
+                    btn.classList.add('bg-cyan-500', 'text-slate-950');
+                    showToast("Kamera WebAR aktif! Arahkan kamera ke meja untuk memproyeksikan objek 3D.", "success");
+                } catch (err) {
+                    // Fallback elegan jika izin kamera ditolak atau tidak tersedia di desktop/iframe
+                    videoEl.classList.add('hidden');
+                    arHud.classList.remove('hidden');
+                    scene.background = new THREE.Color(0x050811);
+                    appState.isARMode = true;
+                    btnText.textContent = "Matikan Simulasi AR";
+                    btn.classList.add('bg-cyan-500', 'text-slate-950');
+                    showToast("Kamera perangkat tidak terdeteksi/dibatasi browser. Mengaktifkan Mode Simulasi HUD AR Spasial.", "warning");
+                }
+            } else {
+                if (appState.arStream) {
+                    appState.arStream.getTracks().forEach(track => track.stop());
+                    appState.arStream = null;
+                }
+                videoEl.srcObject = null;
+                videoEl.classList.add('hidden');
+                arHud.classList.add('hidden');
+
+                // Kembalikan latar studio 3D gelap
+                scene.background = new THREE.Color(0x090d16);
+                scene.fog = new THREE.FogExp2(0x090d16, 0.035);
+                gridHelper.material.opacity = 0.45;
+
+                appState.isARMode = false;
+                btnText.textContent = "Mode WebAR";
+                btn.classList.add('bg-slate-800/90', 'text-cyan-300');
+                btn.classList.remove('bg-cyan-500', 'text-slate-950');
+                showToast("Kembali ke Mode Studio 3D standar.", "info");
+            }
+        }
+
+        async function startNativeWebXR() {
+            if (!navigator.xr) return;
+            try {
+                const session = await navigator.xr.requestSession('immersive-ar', {
+                    optionalFeatures: ['dom-overlay'],
+                    domOverlay: { root: document.body }
+                });
+                renderer.xr.setSession(session);
+                scene.background = null;
+                showToast("Sesi WebXR Immersive AR dimulai!", "success");
+            } catch (e) {
+                showToast("Gagal memulai sesi WebXR native. Gunakan Mode WebAR Kamera.", "warning");
+            }
+        }
+
+        // ============================================================================
+        // 6. MANAJEMEN UI, KATEGORI MODUL, & KONTROL PARAMETER
+        // ============================================================================
+        function selectCategory(category) {
+            appState.currentCategory = category;
+
+            // Update styling tab Desktop & Mobile
+            const isLit = category === 'literasi';
+            document.getElementById('tab-literasi').className = isLit
+                ? "px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 bg-indigo-600 text-white shadow-md"
+                : "px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 text-slate-400 hover:text-white";
+            document.getElementById('tab-matematika').className = !isLit
+                ? "px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 bg-indigo-600 text-white shadow-md"
+                : "px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 text-slate-400 hover:text-white";
+
+            document.getElementById('mob-tab-literasi').className = isLit
+                ? "py-2 px-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white text-center"
+                : "py-2 px-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-400 text-center";
+            document.getElementById('mob-tab-matematika').className = !isLit
+                ? "py-2 px-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white text-center"
+                : "py-2 px-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-400 text-center";
+
+            const firstTopicId = Object.keys(CURRICULUM[category].topics)[0];
+            selectTopic(firstTopicId);
+        }
+
+        function selectTopic(topicId) {
+            appState.currentTopicId = topicId;
+            const cat = appState.currentCategory;
+            const topic = CURRICULUM[cat].topics[topicId];
+
+            // Set nilai awal parameter topik
+            appState.params = {};
+            topic.params.forEach(param => {
+                appState.params[param.id] = param.value;
+            });
+
+            // Render daftar topik
+            const topicListEl = document.getElementById('topic-list');
+            topicListEl.innerHTML = '';
+            Object.values(CURRICULUM[cat].topics).forEach(t => {
+                const active = t.id === topicId;
+                const btn = document.createElement('button');
+                btn.onclick = () => selectTopic(t.id);
+                btn.className = `w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-between border ${
+                    active
+                        ? 'bg-indigo-600/25 border-indigo-500/60 text-white shadow-sm'
+                        : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
+                }`;
+                btn.innerHTML = `
+                    <span class="flex items-center gap-2 truncate">
+                        <i data-lucide="${t.icon}" class="w-4 h-4 ${active ? 'text-cyan-400' : 'text-slate-500'}"></i>
+                        <span class="truncate">${t.name}</span>
+                    </span>
+                    ${active ? '<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>' : ''}
+                `;
+                topicListEl.appendChild(btn);
+            });
+
+            // Update Header & Concept Card
+            document.getElementById('header-subtitle').textContent = `${CURRICULUM[cat].title.split(': ')[1]}: ${topic.name}`;
+            document.getElementById('ai-context-badge').textContent = `Konteks: ${topic.shortName}`;
+            document.getElementById('concept-card-title').textContent = topic.shortName;
+            document.getElementById('concept-card-desc').textContent = topic.description;
+            document.getElementById('concept-formula-box').textContent = topic.formula;
+            document.getElementById('btn-sim-action').textContent = topic.actionLabel;
+
+            renderParameterControls(topic);
+            buildCurrentVisualization();
+            closeQuizBox();
+            lucide.createIcons();
+        }
+
+        function renderParameterControls(topic) {
+            const container = document.getElementById('parameter-controls');
+            container.innerHTML = '';
+
+            topic.params.forEach(param => {
+                const wrapper = document.createElement('div');
+                if (param.type === 'range') {
+                    wrapper.innerHTML = `
+                        <div class="flex justify-between items-center text-xs mb-1">
+                            <label class="text-slate-300 font-medium">${param.label}</label>
+                            <span id="val-${param.id}" class="font-mono text-cyan-300 text-[11px] bg-slate-950 px-1.5 py-0.5 rounded">${appState.params[param.id]}${param.unit}</span>
+                        </div>
+                        <input type="range" min="${param.min}" max="${param.max}" step="${param.step}" value="${appState.params[param.id]}"
+                            oninput="updateParam('${param.id}', parseFloat(this.value), '${param.unit}')" class="w-full">
+                    `;
+                } else if (param.type === 'toggle') {
+                    const checked = appState.params[param.id];
+                    wrapper.className = "flex items-center justify-between pt-1";
+                    wrapper.innerHTML = `
+                        <span class="text-xs text-slate-300 font-medium">${param.label}</span>
+                        <button type="button" onclick="toggleParam('${param.id}')" id="toggle-${param.id}"
+                            class="w-10 h-5 rounded-full transition-colors relative ${checked ? 'bg-cyan-500' : 'bg-slate-700'}">
+                            <span class="block w-3.5 h-3.5 rounded-full bg-white shadow transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}"></span>
+                        </button>
+                    `;
+                }
+                container.appendChild(wrapper);
+            });
+        }
+
+        function updateParam(id, value, unit) {
+            appState.params[id] = value;
+            const labelEl = document.getElementById(`val-${id}`);
+            if (labelEl) labelEl.textContent = `${value}${unit}`;
+            buildCurrentVisualization();
+        }
+
+        function toggleParam(id) {
+            appState.params[id] = !appState.params[id];
+            const topic = CURRICULUM[appState.currentCategory].topics[appState.currentTopicId];
+            renderParameterControls(topic);
+            buildCurrentVisualization();
+        }
+
+        function triggerSimAction() {
+            const topicId = appState.currentTopicId;
+            if (topicId === 'crypto') {
+                clock = new THREE.Clock();
+                showToast("Mengirim ulang gelombang paket data terenkripsi melalui saluran jaringan...", "info");
+            } else if (topicId === 'footprint') {
+                const risk = appState.params.trackerBlock ? "RENDAH (Terlindungi)" : "TINGGI (Data Terekspos)";
+                showToast(`Hasil Audit Privasi: Tingkat Eksposur Jejak Digital = ${risk}`, appState.params.trackerBlock ? "success" : "warning");
+            } else if (topicId === 'datastruct') {
+                showToast(`Mencari nilai target ${appState.params.targetValue} pada pohon BST dalam O(log n) langkah.`, "info");
+            } else if (topicId === 'calculus') {
+                const p = appState.params;
+                const dfdx = (p.amplitude * p.frequency * Math.cos(p.frequency) * Math.cos(p.frequency)).toFixed(3);
+                const dfdy = (-p.amplitude * p.frequency * Math.sin(p.frequency) * Math.sin(p.frequency)).toFixed(3);
+                showToast(`Gradien di titik (1,1): ∂z/∂x = ${dfdx}, ∂z/∂y = ${dfdy}`, "info");
+            } else if (topicId === 'matrix') {
+                selectTopic('matrix');
+                showToast("Matriks transformasi dikembalikan ke konfigurasi awal.", "info");
+            } else if (topicId === 'probability') {
+                buildCurrentVisualization();
+                showToast("35 titik sampel acak Monte Carlo baru telah dibangkitkan pada kurva 3D.", "success");
+            }
+        }
+
+        // Responsive Drawers Toggle
+        function toggleLeftDrawer() {
+            const drawer = document.getElementById('left-drawer');
+            drawer.classList.toggle('-translate-x-[110%]');
+        }
+
+        function toggleRightDrawer() {
+            const drawer = document.getElementById('right-drawer');
+            drawer.classList.toggle('translate-x-[110%]');
+        }
+
+        // Inisialisasi posisi drawer di layar mobile kecil agar kanvas 3D luas
+        function initResponsiveDrawers() {
+            if (window.innerWidth < 1024) {
+                document.getElementById('left-drawer').classList.add('-translate-x-[110%]');
+            }
+            if (window.innerWidth < 768) {
+                document.getElementById('right-drawer').classList.add('translate-x-[110%]');
+            }
+        }
+
+        // ============================================================================
+        // 7. INTEGRASI GENERATIVE AI TUTOR (GEMINI API)
+        // ============================================================================
+        function getCurrentContextSummary() {
+            const catObj = CURRICULUM[appState.currentCategory];
+            const topicObj = catObj.topics[appState.currentTopicId];
+            return {
+                mataKuliah: catObj.title,
+                topik: topicObj.name,
+                deskripsi: topicObj.description,
+                rumus: topicObj.formula,
+                parameterAktif: JSON.stringify(appState.params),
+                modeAR: appState.isARMode ? "Aktif (Kamera WebAR)" : "Mode Studio 3D"
+            };
+        }
+
+        async function callGeminiAPI(userMessage, isQuizRequest = false) {
+            const ctx = getCurrentContextSummary();
+            const systemInstruction = `Anda adalah Asisten Tutor Akademik AI untuk mahasiswa perguruan tinggi pada mata kuliah "${ctx.mataKuliah}".
+Saat ini mahasiswa sedang mengamati visualisasi interaktif 3D/WebAR dengan detail konteks berikut:
+- Topik: ${ctx.topik}
+- Deskripsi Visual: ${ctx.deskripsi}
+- Rumus/Model: ${ctx.rumus}
+- Parameter Real-Time yang diatur mahasiswa: ${ctx.parameterAktif}
+- Mode Tampilan: ${ctx.modeAR}
+
+Tugas Anda:
+1. Berikan penjelasan dalam Bahasa Indonesia yang akademis, terstruktur, ramah, dan mudah dipahami mahasiswa.
+2. Selalu kaitkan penjelasan Anda secara eksplisit dengan nilai parameter 3D yang sedang aktif di layar mahasiswa (misalnya bagaimana perubahan angka parameter memengaruhi bentuk 3D atau keamanan jaringan).
+3. Gunakan format poin-poin singkat dan **teks tebal** pada istilah kunci agar nyaman dibaca di panel chat samping.`;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+            let payload = {
+                contents: [{ role: "user", parts: [{ text: userMessage }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] }
+            };
+
+            // Jika permintaan kuis, gunakan Structured JSON Schema agar kuis interaktif dapat dirender langsung
+            if (isQuizRequest) {
+                payload.generationConfig = {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            pertanyaan: { type: "STRING" },
+                            pilihan: {
+                                type: "ARRAY",
+                                items: { type: "STRING" }
+                            },
+                            indeksBenar: { type: "INTEGER" },
+                            penjelasanUmpanBalik: { type: "STRING" }
+                        },
+                        required: ["pertanyaan", "pilihan", "indeksBenar", "penjelasanUmpanBalik"]
+                    }
+                };
+            }
+
+            // Exponential Backoff untuk ketahanan panggilan API
+            const delays = [1000, 2000, 4000];
+            for (let attempt = 0; attempt <= delays.length; attempt++) {
+                try {
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+                    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error("Respons kosong dari Gemini API");
+                    return text;
+                } catch (error) {
+                    if (attempt === delays.length) throw error;
+                    await new Promise(res => setTimeout(res, delays[attempt]));
+                }
+            }
+        }
+
+        function appendChatMessage(sender, htmlContent) {
+            const container = document.getElementById('ai-chat-messages');
+            const wrapper = document.createElement('div');
+            wrapper.className = sender === 'user' ? "flex justify-end" : "flex gap-2.5";
+
+            if (sender === 'user') {
+                wrapper.innerHTML = `
+                    <div class="max-w-[85%] p-3 rounded-2xl rounded-tr-none bg-indigo-600 text-white shadow-md leading-relaxed">
+                        ${escapeHTML(htmlContent)}
+                    </div>
+                `;
+            } else {
+                wrapper.innerHTML = `
+                    <div class="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                        <i data-lucide="bot" class="w-4 h-4 text-indigo-300"></i>
+                    </div>
+                    <div class="max-w-[88%] p-3 rounded-2xl rounded-tl-none bg-slate-800/85 border border-slate-700/70 text-slate-200 ai-prose">
+                        ${formatMarkdown(htmlContent)}
+                    </div>
+                `;
+            }
+
+            container.appendChild(wrapper);
+            container.scrollTop = container.scrollHeight;
+            lucide.createIcons();
+        }
+
+        function showTypingIndicator() {
+            const container = document.getElementById('ai-chat-messages');
+            const id = 'typing-indicator';
+            const el = document.createElement('div');
+            el.id = id;
+            el.className = "flex gap-2.5 items-center";
+            el.innerHTML = `
+                <div class="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center shrink-0">
+                    <i data-lucide="loader-2" class="w-4 h-4 text-cyan-400 animate-spin"></i>
+                </div>
+                <div class="px-3 py-2 rounded-2xl bg-slate-800/60 border border-slate-700/50 text-slate-400 italic text-[11px]">
+                    Menganalisis konteks 3D & menyusun jawaban...
+                </div>
+            `;
+            container.appendChild(el);
+            container.scrollTop = container.scrollHeight;
+            lucide.createIcons();
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        async function handleChatSubmit(event) {
+            event.preventDefault();
+            if (appState.isGeneratingAI) return;
+
+            const inputEl = document.getElementById('ai-chat-input');
+            const message = inputEl.value.trim();
+            if (!message) return;
+
+            inputEl.value = '';
+            appendChatMessage('user', message);
+
+            appState.isGeneratingAI = true;
+            document.getElementById('ai-send-btn').disabled = true;
+            const typingId = showTypingIndicator();
+
+            try {
+                const reply = await callGeminiAPI(message, false);
+                removeTypingIndicator(typingId);
+                appendChatMessage('ai', reply);
+            } catch (err) {
+                removeTypingIndicator(typingId);
+                appendChatMessage('ai', "Maaf, terjadi gangguan koneksi ke layanan Gemini AI. Silakan coba kirim pertanyaan Anda kembali.");
+            } finally {
+                appState.isGeneratingAI = false;
+                document.getElementById('ai-send-btn').disabled = false;
+            }
+        }
+
+        function askAIAboutCurrentState() {
+            const rightDrawer = document.getElementById('right-drawer');
+            rightDrawer.classList.remove('translate-x-[110%]');
+
+            const ctx = getCurrentContextSummary();
+            const prompt = `Tolong jelaskan apa yang sedang terjadi pada visualisasi 3D "${ctx.topik}" dengan pengaturan parameter saya saat ini (${ctx.parameterAktif}).`;
+            document.getElementById('ai-chat-input').value = prompt;
+            handleChatSubmit(new Event('submit'));
+        }
+
+        async function sendQuickPrompt(type) {
+            if (appState.isGeneratingAI) return;
+            const ctx = getCurrentContextSummary();
+
+            if (type === 'explain') {
+                const prompt = `Jelaskan konsep "${ctx.topik}" secara bertahap (Langkah 1, 2, 3) berdasarkan parameter 3D yang sedang saya atur sekarang.`;
+                document.getElementById('ai-chat-input').value = prompt;
+                handleChatSubmit(new Event('submit'));
+            } else if (type === 'analogy') {
+                const prompt = `Berikan satu analogi kehidupan nyata yang sangat relevan untuk memahami konsep "${ctx.topik}" ini.`;
+                document.getElementById('ai-chat-input').value = prompt;
+                handleChatSubmit(new Event('submit'));
+            } else if (type === 'quiz') {
+                appendChatMessage('user', `Buatkan 1 soal kuis interaktif tentang ${ctx.topik} sesuai parameter saat ini.`);
+                appState.isGeneratingAI = true;
+                const typingId = showTypingIndicator();
+
+                try {
+                    const quizPrompt = `Buatkan 1 soal kuis pilihan ganda (4 opsi) untuk menguji pemahaman mahasiswa tentang "${ctx.topik}" dengan parameter aktif ${ctx.parameterAktif}.`;
+                    const rawJson = await callGeminiAPI(quizPrompt, true);
+                    const quizData = JSON.parse(rawJson);
+                    removeTypingIndicator(typingId);
+                    renderInteractiveQuiz(quizData);
+                    appendChatMessage('ai', "Saya telah menyiapkan **Kuis Evaluasi Kontekstual** di panel bawah. Silakan pilih jawaban yang paling tepat!");
+                } catch (err) {
+                    removeTypingIndicator(typingId);
+                    appendChatMessage('ai', "Gagal membangkitkan kuis interaktif saat ini. Silakan coba beberapa saat lagi.");
+                } finally {
+                    appState.isGeneratingAI = false;
+                }
+            }
+        }
+
+        function renderInteractiveQuiz(quizData) {
+            const box = document.getElementById('interactive-quiz-box');
+            const qText = document.getElementById('quiz-question-text');
+            const optionsList = document.getElementById('quiz-options-list');
+            const feedbackArea = document.getElementById('quiz-feedback-area');
+
+            qText.textContent = quizData.pertanyaan;
+            optionsList.innerHTML = '';
+            feedbackArea.classList.add('hidden');
+            feedbackArea.innerHTML = '';
+
+            quizData.pilihan.forEach((optText, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left px-3 py-2 rounded-lg bg-slate-900/80 hover:bg-indigo-800/60 border border-slate-700 text-xs text-slate-200 transition-all";
+                btn.textContent = `${String.fromCharCode(65 + idx)}. ${optText}`;
+                btn.onclick = () => evaluateQuizAnswer(idx, quizData.indeksBenar, quizData.penjelasanUmpanBalik, optionsList);
+                optionsList.appendChild(btn);
+            });
+
+            box.classList.remove('hidden');
+        }
+
+        function evaluateQuizAnswer(selectedIdx, correctIdx, explanation, optionsContainer) {
+            const buttons = optionsContainer.querySelectorAll('button');
+            buttons.forEach((btn, i) => {
+                btn.disabled = true;
+                if (i === correctIdx) {
+                    btn.classList.remove('bg-slate-900/80', 'border-slate-700');
+                    btn.classList.add('bg-emerald-600/40', 'border-emerald-400', 'text-white', 'font-semibold');
+                } else if (i === selectedIdx && selectedIdx !== correctIdx) {
+                    btn.classList.remove('bg-slate-900/80', 'border-slate-700');
+                    btn.classList.add('bg-rose-600/40', 'border-rose-400', 'text-white');
+                }
+            });
+
+            const feedbackArea = document.getElementById('quiz-feedback-area');
+            const isCorrect = selectedIdx === correctIdx;
+            feedbackArea.innerHTML = `
+                <p class="font-bold ${isCorrect ? 'text-emerald-400' : 'text-rose-400'} mb-1">
+                    ${isCorrect ? '✓ Jawaban Tepat!' : '✕ Kurang Tepat'}
+                </p>
+                <p class="text-slate-300 leading-relaxed">${escapeHTML(explanation)}</p>
+            `;
+            feedbackArea.classList.remove('hidden');
+        }
+
+        function closeQuizBox() {
+            document.getElementById('interactive-quiz-box').classList.add('hidden');
+        }
+
+        // ============================================================================
+        // 8. UTILITAS BANTUAN (TOAST NOTIFICATION & SIMPLE MARKDOWN PARSER)
+        // ============================================================================
+        function showToast(message, type = "info") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                info: "border-indigo-500/50 text-indigo-100",
+                success: "border-emerald-500/50 text-emerald-200",
+                warning: "border-amber-500/50 text-amber-200"
+            };
+            toast.className = `px-4 py-2.5 rounded-xl glass-panel border ${colors[type] || colors.info} text-xs font-medium shadow-xl transition-all duration-300 transform translate-y-0 opacity-100`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+        }
+
+        function formatMarkdown(text) {
+            let safe = escapeHTML(text);
+            // Bold **text**
+            safe = safe.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Inline code `code`
+            safe = safe.replace(/`(.*?)`/g, '<code>$1</code>');
+            // Bullet lists
+            safe = safe.replace(/^\s*[-*]\s+(.*)$/gm, '<li>$1</li>');
+            safe = safe.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+            // Paragraphs
+            return safe.split(/\n\n+/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+        }
+
+        // ============================================================================
+        // 9. BOOTSTRAP APLIKASI SAAT HALAMAN DIMUAT
+        // ============================================================================
+        window.onload = function() {
+            initThreeJS();
+            selectCategory('literasi');
+            initResponsiveDrawers();
+            lucide.createIcons();
+            animate();
+        };
+    </script>
+</body>
+</html>
